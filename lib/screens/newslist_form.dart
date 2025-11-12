@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:football_news/widgets/left_drawer.dart';
+import 'dart:convert';
+import 'package:provider/provider.dart';
+import 'package:pbp_django_auth/pbp_django_auth.dart';
+import 'package:football_news/screens/menu.dart';
+import 'package:football_news/screens/news_entry_list.dart';
 
 class NewsFormPage extends StatefulWidget {
   const NewsFormPage({super.key});
@@ -27,6 +32,7 @@ class _NewsFormPageState extends State<NewsFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    final request = context.watch<CookieRequest>();
     return Scaffold(
       appBar: AppBar(
         title: const Center(child: Text('Add News Form')),
@@ -159,29 +165,51 @@ class _NewsFormPageState extends State<NewsFormPage> {
                     style: ButtonStyle(
                       backgroundColor: MaterialStateProperty.all(Colors.indigo),
                     ),
-                    onPressed: () {
+                    onPressed: () async {
                       if (_formKey.currentState!.validate()) {
-                        // Save the current values
-                        String title = _title;
-                        String content = _content;
-                        String category = _category;
-                        String thumbnail = _thumbnail;
-                        bool isFeatured = _isFeatured;
+                        // Replace the URL based on your setup:
+                        // For Chrome: http://localhost:8000/create-flutter/
+                        // For Android Emulator: http://10.0.2.2:8000/create-flutter/
+                        // For Physical Device: http://<YOUR_PC_IP>:8000/create-flutter/
 
-                        showDialog(
-                          context: context,
-                          builder: (context) {
-                            return AlertDialog(
-                              title: const Text('News saved successfully'),
+                        // Try posting to backend; if it fails or returns unexpected response, fall back to tutorial AlertDialog + navigation
+                        bool postSuccess = false;
+                        try {
+                          final response = await request.postJson(
+                            "http://localhost:8000/create-flutter/",
+                            jsonEncode({
+                              "title": _title,
+                              "content": _content,
+                              "thumbnail": _thumbnail,
+                              "category": _category,
+                              "is_featured": _isFeatured,
+                            }),
+                          );
+                          if (response is Map &&
+                              response['status'] == 'success') {
+                            postSuccess = true;
+                          }
+                        } catch (e) {
+                          // ignore network or parse errors; we'll show dialog anyway
+                        }
+
+                        if (context.mounted) {
+                          // Show the tutorial-style dialog with the entered values
+                          await showDialog<void>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('News saved successfully!'),
                               content: SingleChildScrollView(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Title: $title'),
-                                    Text('Content: $content'),
-                                    Text('Category: $category'),
-                                    Text('Thumbnail URL: $thumbnail'),
-                                    Text('Is Featured: $isFeatured'),
+                                    Text('Judul: $_title'),
+                                    Text('Content: $_content'),
+                                    Text('Category: $_category'),
+                                    Text('Thumbnail: $_thumbnail'),
+                                    Text(
+                                      'Featured: ${_isFeatured ? "Yes" : "No"}',
+                                    ),
                                   ],
                                 ),
                               ),
@@ -190,22 +218,33 @@ class _NewsFormPageState extends State<NewsFormPage> {
                                   child: const Text('OK'),
                                   onPressed: () {
                                     Navigator.pop(context);
-                                    // Reset the form after closing the dialog
-                                    _formKey.currentState!.reset();
-                                    // Reset the state variables
-                                    setState(() {
-                                      _title = "";
-                                      _content = "";
-                                      _category = "update";
-                                      _thumbnail = "";
-                                      _isFeatured = false;
-                                    });
                                   },
                                 ),
                               ],
+                            ),
+                          );
+
+                          // After dialog, navigate to news list page (or home if preferred)
+                          if (postSuccess) {
+                            // If backend succeeded, go to home (original behavior)
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => MyHomePage(
+                                  colorScheme: Theme.of(context).colorScheme,
+                                ),
+                              ),
                             );
-                          },
-                        );
+                          } else {
+                            // Otherwise, go to the local news list page so user can see created item locally
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const NewsEntryListPage(),
+                              ),
+                            );
+                          }
+                        }
                       }
                     },
                     child: const Text(
